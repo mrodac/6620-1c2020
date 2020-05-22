@@ -1,5 +1,5 @@
 # Opciones para el compilador C/C++ para tratamiento de errores y warnings.
-CFLAGS = -std=c99 -Wall -Werror -pedantic -pedantic-errors
+CFLAGS = -Wall -Werror -pedantic -pedantic-errors
 
 machine := $(shell uname -m)
 
