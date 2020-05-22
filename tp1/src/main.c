@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <getopt.h>
 
@@ -51,15 +50,7 @@ int closeFile(FILE* file) {
     return SUCCESS;
 }
 
-bool at_eof(FILE* file) {
-    return feof(file) != 0;
-}
-
-bool has_error(FILE* file) {
-    return ferror(file) != 0;
-}
-
-int processFile(char* matriz, char* inputpath, int M, int N, char* outputprefix) {
+int cargarMatriz(unsigned char* matriz, char* inputpath, int M, int N) {
     int status = SUCCESS;
 
     FILE* inputfile;
@@ -78,6 +69,11 @@ int processFile(char* matriz, char* inputpath, int M, int N, char* outputprefix)
     return status;
 }
 
+int procesar(unsigned char* matriz, char* outputprefix, int i, int M, int N) {
+    return SUCCESS;
+}
+
+
 int parsearEntero(char* cstr, int* entero) {
     char* endptr = cstr;
     *entero = strtol(cstr, &endptr, 10);
@@ -92,7 +88,7 @@ int parsearEntero(char* cstr, int* entero) {
 int main(int argc, char *argv[]) {
     int status = SUCCESS;
 
-    int M=0, N=0;
+    int i = 0, M=0, N=0;
     char *inputpath = 0;
     char *outputprefix = 0;
 
@@ -111,10 +107,12 @@ int main(int argc, char *argv[]) {
         switch (c) {
         case 1:
             if (index == 0)
-                status = parsearEntero(optarg, &M);
+                status = parsearEntero(optarg, &i);
             else if (index == 1)
-                status = parsearEntero(optarg, &N);
+                status = parsearEntero(optarg, &M);
             else if (index == 2)
+                status = parsearEntero(optarg, &N);
+            else if (index == 3)
                 inputpath = optarg;
             else
                 status = ERROR;
@@ -142,6 +140,11 @@ int main(int argc, char *argv[]) {
         }
     } while (c != -1);
 
+    if (index < 4) {
+        mostrar_ayuda();
+        return ERROR;
+    }
+
     unsigned char* matriz = 0;
 
     if (M > 1 && N > 1) {
@@ -153,7 +156,10 @@ int main(int argc, char *argv[]) {
     }
 
     if (status != ERROR)
-        status = processFile(matriz, inputpath, M, N, outputprefix);
+        status = cargarMatriz(matriz, inputpath, M, N);
+
+    if (status != ERROR)
+        status = procesar(matriz, outputprefix, i, M, N);
 
     if (matriz)
         free(matriz);
