@@ -1,28 +1,33 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <getopt.h>
+#include <math.h>
 #include <unistd.h>
 
 #define ERROR -1
-#define SUCCESS 0
+#define OK 0
 
 #define LINEA 100
-
 
 /*
 extern unsigned int vecinos(unsigned char *a, unsigned int i, unsigned int j,
         unsigned int M, unsigned int N);
 */
 
-unsigned int vecinos(unsigned char *matriz, unsigned int i, unsigned int j, unsigned int M, unsigned int N) {
+unsigned int mod(int a, int N) {
+    return (a % N + N) %N;
+}
 
+unsigned int vecinos(unsigned char *matriz, unsigned int i, unsigned int j, unsigned int filas, unsigned int columnas) {
     unsigned int v = 0;
-    for (int y = -1; y < 2; y++) {
-        for (int x = -1; x < 2; x++) {
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
             if (y || x) {
-                unsigned int I = (y+i)% M, J = (x+j)%N;
-                if (matriz[I * M + J])
+                unsigned int I = mod(y+i, filas);
+                unsigned int J = mod(x+j, columnas);
+                if (matriz[I * columnas + J])
                     v++;
             }
         }
@@ -49,17 +54,18 @@ void mostrar_ayuda() {
             "el prefijo será el nombre del archivo de entrada.\n");
 }
 
-int openFile(FILE** file, const char *path, const char *mode) {
-    *file = fopen(path, mode);
+
+int abrirArchivo(FILE** file, const char *nombre, const char *modo) {
+    *file = fopen(nombre, modo);
     if (*file == NULL) {
-        fprintf(stderr, "Error abriendo el archivo '%s': ", path);
+        fprintf(stderr, "Error abriendo el archivo '%s': ", nombre);
         perror(NULL);
         return ERROR;
     }
-    return SUCCESS;
+    return OK;
 }
 
-int closeFile(FILE* file) {
+int cerrarArchivo(FILE* file) {
     if (file == NULL)
         return ERROR;
 
@@ -67,7 +73,7 @@ int closeFile(FILE* file) {
         perror("Error cerrando archivo");
         return ERROR;
     }
-    return SUCCESS;
+    return OK;
 }
 
 int parsearEntero(char** str, int* entero, char tail) {
@@ -79,27 +85,22 @@ int parsearEntero(char** str, int* entero, char tail) {
     }
 
     *str=endptr+1;
-    return SUCCESS;
+    return OK;
 }
 
-int cargarMatriz(unsigned char* matriz, char* inputpath, unsigned int M, unsigned int N) {
-    int status = SUCCESS;
-
-    FILE* inputfile;
-
-    if (status == SUCCESS && inputpath && strcmp(inputpath, "-") != 0)
-        status = openFile(&inputfile, inputpath, "r");
-    else
-        inputfile = stdin;
+int cargarMatriz(unsigned char* matriz, char* entrada, unsigned int filas, unsigned int columnas) {
+    int status = OK;
+    FILE* archivo;
+    status = abrirArchivo(&archivo, entrada, "r");
 
     if (status != ERROR) {
-        for (int idx = 0; idx < M * N; idx++)
+        for (int idx = 0; idx < filas * columnas; idx++)
             matriz[idx] = 0;
 
         char linea[LINEA];
         int i, j;
 
-        while (status != ERROR && fgets (linea, LINEA, inputfile) != NULL) {
+        while (status != ERROR && fgets (linea, LINEA, archivo) != NULL) {
             char* ptr = linea;
             status = parsearEntero(&ptr, &i, ' ');
 
@@ -110,56 +111,83 @@ int cargarMatriz(unsigned char* matriz, char* inputpath, unsigned int M, unsigne
             if (status == ERROR)
                 break;
 
-            if (i < 0 || i >= M || j < 0 || j >= N)
+            if (i < 0 || i >= filas || j < 0 || j >= columnas)
                 status = ERROR;
             else
-                matriz[i * M + j] = 1;
+                matriz[i * columnas + j] = 1;
         }
 
         if (status == ERROR)
             fprintf(stderr, "Formato de coordenadas no válido: '%s': ", linea);
 
-        if (ferror(inputfile)) {
-            fprintf(stderr, "Error leyendo el archivo '%s': ", inputpath);
+        if (ferror(archivo)) {
+            fprintf(stderr, "Error leyendo el archivo '%s': ", entrada);
             perror(NULL);
             status = ERROR;
         }
-
     }
 
-    closeFile(inputfile);
+    cerrarArchivo(archivo);
 
     return status;
 }
 
-void mostrarMatriz(unsigned char* matriz, unsigned int M, unsigned int N, FILE* output) {
+int guardarEstado(unsigned char* matriz, unsigned int filas, unsigned int columnas, char* salida) {
+    int status = OK;
+    FILE* archivo;
+    status = abrirArchivo(&archivo, salida, "w");
 
-    fputc('/', output);
-    for (int j = 0; j < N; j++) {
-        fprintf(output, "--");
+    if (status != ERROR) {
+        if (fprintf(archivo, "P1\n%d %d\n", columnas, filas) > 0) {
+            //unsigned int bytes = 0;
+
+            for (int i = 0; i < filas && status != ERROR; i++) {
+                for (int j = 0; j < columnas && status != ERROR; j++) {
+                    char c = matriz[i * columnas + j] ? '1' : '0';
+                    status = fprintf(archivo, "%c ", c) > 0 ? 0 : -1;
+                }
+                status = fprintf(archivo, "\n") > 0 ? 0 : -1;
+            }
+        }
+        if (ferror(archivo)) {
+            fprintf(stderr, "Error escribiendo en el archivo '%s': ", salida);
+            perror(NULL);
+            status = ERROR;
+        }
+    }
+
+    cerrarArchivo(archivo);
+    return status;
+}
+
+void mostrarEstado(unsigned char* matriz, unsigned int filas, unsigned int columnas) {
+    printf("/");
+    for (int j = 0; j < columnas; j++) {
+        printf("--");
     }
 
     printf("\\\n");
-    for (int i = 0; i < M; i++) {
-        fputc('|', output);
+    for (int i = 0; i < filas; i++) {
+        printf("|");
 
-        for (int j = 0; j < N; j++) {
-            if (matriz[i * M + j])
-                fprintf(output, "()");
+        for (int j = 0; j < columnas; j++) {
+            if (matriz[i * columnas + j])
+                printf("()");
             else
-                fprintf(output,"  ");
+                printf("  ");
         }
-        fprintf(output, "|\n");
+        printf("|\n");
     }
 
-    fputc('\\', output);
-    for (int j = 0; j < N; j++) {
-        fprintf(output, "--");
+    printf("\\");
+    for (int j = 0; j < columnas; j++) {
+        printf("--");
     }
-    fprintf(output, "/\n");
-
-    usleep(50 * 1000);
+    printf("/\n");
+    usleep(100 * 1000);
 }
+
+
 
 /**
 Si una celda tiene menos de dos o más de tres vecinos encendidos, su siguiente estado es apagado.
@@ -168,78 +196,75 @@ Si una celda apagada tiene exactamente tres vecinos encendidos, su siguiente est
 * */
 
 
-int procesar(unsigned char** matriz, char* outputprefix, unsigned int steps, unsigned int M, unsigned int N) {
-    for (int step = 0 ; step < steps; step++) {
-        unsigned char* siguiente = malloc(M * N);
+int siguiente(unsigned char** matriz, unsigned int filas, unsigned int columnas) {
+    int status = OK;
+	unsigned char* siguiente = malloc(filas * columnas);
 
-        if (! siguiente) {
-            fprintf(stderr, "Error reservando memoria\n");
-            return ERROR;
-        }
+	if (! siguiente) {
+		fprintf(stderr, "Error reservando memoria\n");
+		status = ERROR;
+	}
 
-        for (int i = 0; i < M; i++) {
-            for (int j = 0; j < N; j++) {
-                unsigned char estado = (*matriz)[i * M + j];
-                unsigned int v = vecinos(*matriz, i, j, M, N);
+	if (status == OK) {
+		for (int i = 0; i < filas; i++) {
+			for (int j = 0; j < columnas; j++) {
+				unsigned char estado = (*matriz)[i * columnas + j];
+				unsigned int v = vecinos(*matriz, i, j, filas, columnas);
 
-                if (v < 2 || v > 3)
-                    estado = 0;
-                else if (estado && (v == 2 || v == 3))
-                    estado = 1;
-                else if (! estado && v == 3)
-                    estado = 1;
+				if (v < 2 || v > 3)
+					estado = 0;
+				else if (estado && (v == 2 || v == 3))
+					estado = 1;
+				else if (! estado && v == 3)
+					estado = 1;
 
-                siguiente[i * M + j] = estado;
-            }
-        }
+				siguiente[i * columnas + j] = estado;
+			}
+		}
+	}
 
-        free(*matriz);
-        *matriz = siguiente;
-        mostrarMatriz(*matriz, M, N, stdout);
-    }
+	if (siguiente) {
+		free(*matriz);
+		*matriz = siguiente;
+	}
 
-    return SUCCESS;
+    return status;
 }
 
 
-
-
-int main(int argc, char *argv[]) {
-    int status = SUCCESS;
-
-    unsigned int steps=0, M=0, N=0;
-    char *inputpath = 0;
-    char *outputprefix = 0;
+int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int* filas, unsigned int* columnas, char** entrada, char** prefijoSalida, bool* mostrarEstados) {
+    int status = OK;
 
     static struct option longOpts[] = {
             { "help", no_argument, NULL, 'h' },
             { "version", no_argument, NULL, 'V' },
             { "o", required_argument, NULL, 'o' },
+            { "mostrar", no_argument, NULL, 'm' },
             { NULL, 0, NULL, 0 }
     };
 
     int c;
     unsigned short index = 0;
     do {
-        c = getopt_long(argc, argv, "-hVo:", longOpts, NULL);
+        c = getopt_long(argc, argv, "-hVo:m", longOpts, NULL);
 
         switch (c) {
         case 1:
             if (index < 3) {
-                int i;
-                status = parsearEntero(&optarg, &i, '\0');
-                if (status != ERROR && i < 0)
+                int entero;
+                status = parsearEntero(&optarg, &entero, '\0');
+                if (status != ERROR && entero < 0)
                     status = ERROR;
 
                 if (index == 0)
-                    steps = i;
+                    *pasos = entero;
                 else if (index == 1)
-                    M = i;
+                    *filas = entero;
                 else if (index == 2)
-                    N = i;
+                    *columnas = entero;
 
             } else if (index == 3)
-                inputpath = optarg;
+                *entrada = optarg;
             else
                 status = ERROR;
 
@@ -253,12 +278,15 @@ int main(int argc, char *argv[]) {
             break;
         case 'V':
             printf("%s", "conway v0.1\n");
-            return SUCCESS;
+            return OK;
         case 'h':
             mostrar_ayuda();
-            return SUCCESS;
+            return OK;
         case 'o':
-            outputprefix = optarg;
+            *prefijoSalida = optarg;
+            break;
+        case 'm':
+            *mostrarEstados = true;
             break;
         case '?':
             mostrar_ayuda();
@@ -273,26 +301,67 @@ int main(int argc, char *argv[]) {
         return ERROR;
     }
 
-    unsigned char* matriz = 0;
+    if (! *prefijoSalida)
+        *prefijoSalida = *entrada;
 
-    if (M > 1 && N > 1) {
-        matriz = malloc(M * N);
-        if (! matriz) {
+    return status;
+}
+
+
+int main(int argc, char *argv[]) {
+    unsigned int pasos=0, filas=0, columnas=0;
+    char *entrada = 0;
+    char *prefijoSalida = 0;
+    bool mostrarEstados = false;
+
+    int status = parsearParametros(argc, argv, &pasos, &filas, &columnas, &entrada, &prefijoSalida, &mostrarEstados);
+
+    char digitos = floor(log10(pasos))+1;
+    if (digitos > 9) {
+        fprintf(stderr, "Usar una cantidad de pasos menor a 10^9\n");
+        status = ERROR;
+    }
+    if (digitos < 3)
+        digitos = 3;
+
+    if (status != ERROR) {
+        char formatoSalida[] = "%s_%0?d.pbm";
+        formatoSalida[5] = digitos + 48; //número a texto
+        unsigned int salidalen = strlen(prefijoSalida) + digitos + 6; //6: len('_.pbm\0')
+        char* salida = malloc(salidalen);
+
+        unsigned char* matriz = malloc(filas * columnas);
+
+        if (! matriz || ! salida) {
             fprintf(stderr, "Error reservando memoria\n");
             status = ERROR;
         }
+
+        if (status != ERROR)
+            status = cargarMatriz(matriz, entrada, filas, columnas);
+
+        if (status != ERROR) {
+            if (mostrarEstados)
+                mostrarEstado(matriz, filas, columnas);
+
+            snprintf(salida, salidalen, formatoSalida, prefijoSalida, 0);
+			status = guardarEstado(matriz, filas, columnas, salida);
+
+            for (int paso = 1 ; paso <= pasos && status != ERROR; paso++) {
+                status = siguiente(&matriz, filas, columnas);
+                if (mostrarEstados)
+                    mostrarEstado(matriz, filas, columnas);
+
+                snprintf(salida, salidalen, formatoSalida, prefijoSalida, paso);
+                status = guardarEstado(matriz, filas, columnas, salida);
+            }
+        }
+
+        if (salida)
+            free(salida);
+        if (matriz)
+            free(matriz);
     }
-
-    if (status != ERROR)
-        status = cargarMatriz(matriz, inputpath, M, N);
-
-    if (status != ERROR) {
-        mostrarMatriz(matriz, M, N, stdout);
-        status = procesar(&matriz, outputprefix, steps, M, N);
-    }
-
-    if (matriz)
-        free(matriz);
 
     return status;
 }
