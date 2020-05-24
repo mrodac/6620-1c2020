@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <getopt.h>
@@ -8,8 +8,6 @@
 
 #define ERROR -1
 #define OK 0
-
-#define LINEA 100
 
 /*
 extern unsigned int vecinos(unsigned char *a, unsigned int i, unsigned int j,
@@ -40,18 +38,19 @@ void mostrar_ayuda() {
     printf("%s", "Uso:\n\t"
             "conway -h\n\t"
             "conway -V\n\t"
-            "conway i M N inputfile [-o outputprefix]\n"
+            "conway i M N inputfile [-o outputprefix] [-d]\n"
             "Opciones:\n\t"
-            "-h, --help\t\tImprime este mensaje.\n\t"
+            "-h, --help\tImprime este mensaje.\n\t"
             "-V, --version \tDa la versión del programa.\n\t"
-            "-o Prefijo de los archivos de salida.\n\t"
-            "Ejemplos:\n\t"
-            "conway 10 20 20 glider -o estado\n "
-            "Representa 10 iteraciones del Juego de la Vida en una matriz de 20x20,\n "
-            "con un estado inicial tomado del archivo ‘‘glider’’.\n "
-            "Los archivos de salida se llamarán estado_n.pbm.\n "
-            "Si no se da un prefijo para los archivos de salida,\n "
-            "el prefijo será el nombre del archivo de entrada.\n");
+            "-d, --display\tMuestra el estado de cada iteración por la salida estandar.\n\t"
+            "-o\t\tPrefijo de los archivos de salida.\n\t"
+            "Ejemplos:\n"
+            " conway 10 20 20 glider -o estado\n "
+            " Representa 10 iteraciones del Juego de la Vida en una matriz de 20x20,\n "
+            " con un estado inicial tomado del archivo ‘‘glider’’.\n "
+            " Los archivos de salida se llamarán estado_n.pbm.\n "
+            " Si no se da un prefijo para los archivos de salida,\n "
+            " el prefijo será el nombre del archivo de entrada.\n");
 }
 
 
@@ -76,18 +75,6 @@ int cerrarArchivo(FILE* file) {
     return OK;
 }
 
-int parsearEntero(char** str, int* entero, char tail) {
-    char* endptr = *str;
-    *entero = strtol(*str, &endptr, 10);
-
-    if (endptr == *str || *endptr != tail) {
-        return ERROR;
-    }
-
-    *str=endptr+1;
-    return OK;
-}
-
 int cargarMatriz(unsigned char* matriz, char* entrada, unsigned int filas, unsigned int columnas) {
     int status = OK;
     FILE* archivo;
@@ -97,28 +84,22 @@ int cargarMatriz(unsigned char* matriz, char* entrada, unsigned int filas, unsig
         for (int idx = 0; idx < filas * columnas; idx++)
             matriz[idx] = 0;
 
-        char linea[LINEA];
         int i, j;
 
-        while (status != ERROR && fgets (linea, LINEA, archivo) != NULL) {
-            char* ptr = linea;
-            status = parsearEntero(&ptr, &i, ' ');
-
-            if (status == ERROR)
-                break;
-
-            status = parsearEntero(&ptr, &j, '\n');
-            if (status == ERROR)
-                break;
-
-            if (i < 0 || i >= filas || j < 0 || j >= columnas)
-                status = ERROR;
-            else
-                matriz[i * columnas + j] = 1;
-        }
-
-        if (status == ERROR)
-            fprintf(stderr, "Formato de coordenadas no válido: '%s': ", linea);
+        do {
+            if (fscanf(archivo, "%d %d\n", &i, &j) != 2) {
+                if (! feof(archivo) || !ferror(archivo)) {
+                    fprintf(stderr, "Error de formato en el archivo de entrada\n");
+                    status = ERROR;
+                }
+            } else {
+                if (i < 0 || i >= filas || j < 0 || j >= columnas) {
+                    fprintf(stderr, "Coordenadas fuera de la matriz: (%d;%d)\n", i, j);
+                    status = ERROR;
+                } else
+                    matriz[i * columnas + j] = 1;
+            }
+        } while (status != ERROR && ! feof(archivo));
 
         if (ferror(archivo)) {
             fprintf(stderr, "Error leyendo el archivo '%s': ", entrada);
@@ -239,21 +220,20 @@ int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int*
             { "help", no_argument, NULL, 'h' },
             { "version", no_argument, NULL, 'V' },
             { "o", required_argument, NULL, 'o' },
-            { "mostrar", no_argument, NULL, 'm' },
+            { "display", no_argument, NULL, 'd' },
             { NULL, 0, NULL, 0 }
     };
 
     int c;
     unsigned short index = 0;
     do {
-        c = getopt_long(argc, argv, "-hVo:m", longOpts, NULL);
+        c = getopt_long(argc, argv, "-hVo:d", longOpts, NULL);
 
         switch (c) {
         case 1:
             if (index < 3) {
-                int entero;
-                status = parsearEntero(&optarg, &entero, '\0');
-                if (status != ERROR && entero < 0)
+                int entero = 0;
+                if (sscanf(optarg, "%d", &entero) != 1 || entero < 0)
                     status = ERROR;
 
                 if (index == 0)
@@ -277,7 +257,7 @@ int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int*
             index+=1;
             break;
         case 'V':
-            printf("%s", "conway v0.1\n");
+            printf("%s", "conway v0.2\n");
             return OK;
         case 'h':
             mostrar_ayuda();
@@ -285,7 +265,7 @@ int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int*
         case 'o':
             *prefijoSalida = optarg;
             break;
-        case 'm':
+        case 'd':
             *mostrarEstados = true;
             break;
         case '?':
@@ -308,6 +288,33 @@ int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int*
 }
 
 
+int generarVideo(char* prefijoSalida, unsigned char digitos) {
+    unsigned int tamPrefijoSalida = strlen(prefijoSalida);
+
+    char* salida = malloc(tamPrefijoSalida + 5); //extensión
+    char* archivos = malloc(tamPrefijoSalida + 10); //"_%0Xd.pbm"
+
+    if (! archivos || ! salida) {
+        fprintf(stderr, "Error reservando memoria\n");
+        return ERROR;
+    }
+
+    snprintf(salida, tamPrefijoSalida + 5, "%s.mp4", prefijoSalida);
+
+    snprintf(archivos, tamPrefijoSalida + 10, "%s_%%0%dd.pbm", prefijoSalida, digitos);
+
+    int rv = execl("/usr/bin/ffmpeg", "ffmpeg", "-framerate", "10", "-i", archivos, "-vf", "scale=iw*10:-1", "-sws_flags", "neighbor", "-loglevel", "panic", "-r", "24", salida, (char*) NULL);
+
+    if (salida)
+        free(salida);
+
+    if (archivos)
+        free(archivos);
+
+    return rv;
+}
+
+
 int main(int argc, char *argv[]) {
     unsigned int pasos=0, filas=0, columnas=0;
     char *entrada = 0;
@@ -316,7 +323,7 @@ int main(int argc, char *argv[]) {
 
     int status = parsearParametros(argc, argv, &pasos, &filas, &columnas, &entrada, &prefijoSalida, &mostrarEstados);
 
-    char digitos = floor(log10(pasos))+1;
+    unsigned char digitos = floor(log10(pasos))+1;
     if (digitos > 9) {
         fprintf(stderr, "Usar una cantidad de pasos menor a 10^9\n");
         status = ERROR;
@@ -325,10 +332,11 @@ int main(int argc, char *argv[]) {
         digitos = 3;
 
     if (status != ERROR) {
-        char formatoSalida[] = "%s_%0?d.pbm";
-        formatoSalida[5] = digitos + 48; //número a texto
         unsigned int salidalen = strlen(prefijoSalida) + digitos + 6; //6: len('_.pbm\0')
         char* salida = malloc(salidalen);
+
+        char formatoSalida[] = "%s_%0?d.pbm";
+        formatoSalida[5] = digitos + 48; //número a texto
 
         unsigned char* matriz = malloc(filas * columnas);
 
@@ -357,10 +365,18 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        if (salida)
-            free(salida);
         if (matriz)
             free(matriz);
+
+        if (salida)
+            free(salida);
+
+        if (status != ERROR && pasos > 0) {
+            if (generarVideo(prefijoSalida, digitos) < 0) {
+                fprintf(stderr, "Error invocando a ffmpeg\n");
+                status = ERROR;
+            }
+        }
     }
 
     return status;

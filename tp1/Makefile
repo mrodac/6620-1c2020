@@ -1,5 +1,5 @@
 # Opciones para el compilador C/C++ para tratamiento de errores y warnings.
-CFLAGS = -O0 -Wall -Werror -pedantic -pedantic-errors
+CFLAGS = -Wall -Werror -pedantic -pedantic-errors
 
 machine := $(shell uname -m)
 
@@ -15,9 +15,6 @@ else
 	OBJECTS := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SOURCES))
 endif
 
-LDFLAGS = -lm
-
-
 $(OBJ)/%.o: $(SRC)/%.c | $(OBJ)
 	$(CC) -I$(SRC) -c $< -o $@ $(CFLAGS)
 
@@ -27,7 +24,7 @@ conway: $(OBJECTS)
 	$(CC) $(OBJECTS) -o conway -lm
 
 clean:
-	$(RM) -f $(OBJECTS) conway *.pbm
+	$(RM) -f $(OBJECTS) conway *.pbm *.mp4
 
 $(OBJ):
 	mkdir -p $(OBJ)
