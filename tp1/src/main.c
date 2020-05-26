@@ -91,23 +91,25 @@ int cargarMatriz(unsigned char* matriz, char* entrada, unsigned int filas, unsig
     return status;
 }
 
-int guardarEstado(unsigned char* matriz, unsigned int filas, unsigned int columnas, char* salida) {
+int guardarImagen(unsigned char* matriz, unsigned int filas, unsigned int columnas, char* salida, unsigned char escala) {
     int status = OK;
     FILE* archivo;
     status = abrirArchivo(&archivo, salida, "w");
 
     if (status != ERROR) {
-        if (fprintf(archivo, "P1\n%d %d\n", columnas, filas) > 0) {
-            //unsigned int bytes = 0;
+        if (fprintf(archivo, "P4\n%d %d\n", columnas * escala, filas * escala) > 0) {
+        	for (int i = 0; i < filas && status != ERROR; i++) {
+            	for (int h = 0; h < escala && status != ERROR; h++) {
+					for (int j = 0; j < columnas && status != ERROR; j++) {
+						char c = matriz[i * columnas + j] ? 0 : 255;
 
-            for (int i = 0; i < filas && status != ERROR; i++) {
-                for (int j = 0; j < columnas && status != ERROR; j++) {
-                    char c = matriz[i * columnas + j] ? '1' : '0';
-                    status = fprintf(archivo, "%c ", c) > 0 ? 0 : -1;
-                }
-                status = fprintf(archivo, "\n") > 0 ? 0 : -1;
+						for (int w = 0; w < escala && status != ERROR; w+=8)
+						    status = fputc(c, archivo) < 0 ? ERROR : OK;
+					}
+            	}
             }
         }
+
         if (ferror(archivo)) {
             fprintf(stderr, "Error escribiendo en el archivo '%s': ", salida);
             perror(NULL);
@@ -280,9 +282,9 @@ int generarVideo(char* prefijoSalida, unsigned char digitos) {
 
     snprintf(archivos, tamPrefijoSalida + 10, "%s_%%0%dd.pbm", prefijoSalida, digitos);
 
-    printf("Generando %s... ", salida);
+    printf("Generando %s...\n", salida);
 
-    int rv = execl("/usr/bin/ffmpeg", "ffmpeg", "-y", "-framerate", "10", "-i", archivos, "-vf", "scale=iw*10:-1", "-sws_flags", "neighbor", "-loglevel", "panic", "-r", "10", salida, (char*) NULL);
+    int rv = execl("/usr/bin/ffmpeg", "ffmpeg", "-y", "-framerate", "10", "-i", archivos, "-loglevel", "panic", "-r", "10", salida, (char*) NULL);
 
     if (salida)
         free(salida);
@@ -335,8 +337,13 @@ int main(int argc, char *argv[]) {
             if (mostrarEstados)
                 mostrarEstado(matriz, filas, columnas);
 
+            unsigned int escalaX = 1920 / columnas / 8;
+            unsigned int escalaY = 1080 / filas / 8;
+            unsigned char escala = escalaX < escalaY ? escalaX : escalaY;
+            escala = escala > 0 ? escala * 8 : 8;
+
             snprintf(salida, salidalen, formatoSalida, prefijoSalida, 0);
-			status = guardarEstado(matriz, filas, columnas, salida);
+			status = guardarImagen(matriz, filas, columnas, salida, escala);
 
             for (int paso = 1 ; paso <= pasos && status != ERROR; paso++) {
                 status = siguiente(&matriz, filas, columnas);
@@ -344,7 +351,7 @@ int main(int argc, char *argv[]) {
                     mostrarEstado(matriz, filas, columnas);
 
                 snprintf(salida, salidalen, formatoSalida, prefijoSalida, paso);
-                status = guardarEstado(matriz, filas, columnas, salida);
+                status = guardarImagen(matriz, filas, columnas, salida, escala);
             }
         }
 

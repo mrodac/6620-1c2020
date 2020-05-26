@@ -15,4 +15,4 @@ conway:
 	$(CC) $(SOURCES) -o conway -lm $(CFLAGS)
 
 clean:
-	$(RM) -f conway *.pbm *.mp4
+	$(RM) -f conway *.pbm
