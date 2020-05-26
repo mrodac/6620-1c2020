@@ -6,46 +6,24 @@
 #include <math.h>
 #include <unistd.h>
 
+#include "vecinos.h"
+
 #define ERROR -1
 #define OK 0
-
-/*
-extern unsigned int vecinos(unsigned char *a, unsigned int i, unsigned int j,
-        unsigned int M, unsigned int N);
-*/
-
-unsigned int mod(int a, int N) {
-    return (a % N + N) %N;
-}
-
-unsigned int vecinos(unsigned char *matriz, unsigned int i, unsigned int j, unsigned int filas, unsigned int columnas) {
-    unsigned int v = 0;
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
-            if (y || x) {
-                unsigned int I = mod(y+i, filas);
-                unsigned int J = mod(x+j, columnas);
-                if (matriz[I * columnas + J])
-                    v++;
-            }
-        }
-    }
-    return v;
-}
-
 
 void mostrar_ayuda() {
     printf("%s", "Uso:\n\t"
             "conway -h\n\t"
             "conway -V\n\t"
-            "conway i M N inputfile [-o outputprefix] [-d]\n"
+            "conway i M N inputfile [-o outputprefix] [-d] [-n] \n"
             "Opciones:\n\t"
             "-h, --help\tImprime este mensaje.\n\t"
             "-V, --version \tDa la versión del programa.\n\t"
             "-d, --display\tMuestra el estado de cada iteración por la salida estandar.\n\t"
             "-o\t\tPrefijo de los archivos de salida.\n\t"
+            "-n, --novideo\tOmite la generación de un video en base a los archivos de salida.\n"
             "Ejemplos:\n"
-            " conway 10 20 20 glider -o estado\n "
+            " conway 10 20 20 glider -o estado\n"
             " Representa 10 iteraciones del Juego de la Vida en una matriz de 20x20,\n "
             " con un estado inicial tomado del archivo ‘‘glider’’.\n "
             " Los archivos de salida se llamarán estado_n.pbm.\n "
@@ -165,18 +143,13 @@ void mostrarEstado(unsigned char* matriz, unsigned int filas, unsigned int colum
         printf("--");
     }
     printf("/\n");
-    usleep(100 * 1000);
 }
-
-
 
 /**
 Si una celda tiene menos de dos o más de tres vecinos encendidos, su siguiente estado es apagado.
 Si una celda encendida tiene dos o tres vecinos encendidos, su siguiente estado es encendido.
 Si una celda apagada tiene exactamente tres vecinos encendidos, su siguiente estado es encendido.
 * */
-
-
 int siguiente(unsigned char** matriz, unsigned int filas, unsigned int columnas) {
     int status = OK;
 	unsigned char* siguiente = malloc(filas * columnas);
@@ -213,7 +186,7 @@ int siguiente(unsigned char** matriz, unsigned int filas, unsigned int columnas)
 }
 
 
-int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int* filas, unsigned int* columnas, char** entrada, char** prefijoSalida, bool* mostrarEstados) {
+int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int* filas, unsigned int* columnas, char** entrada, char** prefijoSalida, bool* mostrarEstados, bool* video) {
     int status = OK;
 
     static struct option longOpts[] = {
@@ -221,13 +194,14 @@ int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int*
             { "version", no_argument, NULL, 'V' },
             { "o", required_argument, NULL, 'o' },
             { "display", no_argument, NULL, 'd' },
+            { "novideo", no_argument, NULL, 'n' },
             { NULL, 0, NULL, 0 }
     };
 
     int c;
     unsigned short index = 0;
     do {
-        c = getopt_long(argc, argv, "-hVo:d", longOpts, NULL);
+        c = getopt_long(argc, argv, "-hVo:dn", longOpts, NULL);
 
         switch (c) {
         case 1:
@@ -268,6 +242,9 @@ int parsearParametros(int argc, char *argv[], unsigned int* pasos, unsigned int*
         case 'd':
             *mostrarEstados = true;
             break;
+        case 'n':
+            *video = false;
+            break;
         case '?':
             mostrar_ayuda();
             return ERROR;
@@ -303,7 +280,9 @@ int generarVideo(char* prefijoSalida, unsigned char digitos) {
 
     snprintf(archivos, tamPrefijoSalida + 10, "%s_%%0%dd.pbm", prefijoSalida, digitos);
 
-    int rv = execl("/usr/bin/ffmpeg", "ffmpeg", "-framerate", "10", "-i", archivos, "-vf", "scale=iw*10:-1", "-sws_flags", "neighbor", "-loglevel", "panic", "-r", "24", salida, (char*) NULL);
+    printf("Generando %s... ", salida);
+
+    int rv = execl("/usr/bin/ffmpeg", "ffmpeg", "-y", "-framerate", "10", "-i", archivos, "-vf", "scale=iw*10:-1", "-sws_flags", "neighbor", "-loglevel", "panic", "-r", "10", salida, (char*) NULL);
 
     if (salida)
         free(salida);
@@ -320,16 +299,20 @@ int main(int argc, char *argv[]) {
     char *entrada = 0;
     char *prefijoSalida = 0;
     bool mostrarEstados = false;
+    bool video = true;
 
-    int status = parsearParametros(argc, argv, &pasos, &filas, &columnas, &entrada, &prefijoSalida, &mostrarEstados);
+    int status = parsearParametros(argc, argv, &pasos, &filas, &columnas, &entrada, &prefijoSalida, &mostrarEstados, &video);
+    unsigned char digitos = 3;
 
-    unsigned char digitos = floor(log10(pasos))+1;
-    if (digitos > 9) {
-        fprintf(stderr, "Usar una cantidad de pasos menor a 10^9\n");
-        status = ERROR;
+    if (pasos > 0) {
+        digitos = floor(log10(pasos))+1;
+        if (digitos > 9) {
+            fprintf(stderr, "Usar una cantidad de pasos menor a 10^9\n");
+            status = ERROR;
+        }
+        if (digitos < 3)
+            digitos = 3;
     }
-    if (digitos < 3)
-        digitos = 3;
 
     if (status != ERROR) {
         unsigned int salidalen = strlen(prefijoSalida) + digitos + 6; //6: len('_.pbm\0')
@@ -371,12 +354,13 @@ int main(int argc, char *argv[]) {
         if (salida)
             free(salida);
 
-        if (status != ERROR && pasos > 0) {
+        if (status != ERROR && pasos > 0 && video) {
             if (generarVideo(prefijoSalida, digitos) < 0) {
                 fprintf(stderr, "Error invocando a ffmpeg\n");
                 status = ERROR;
             }
         }
+
     }
 
     return status;

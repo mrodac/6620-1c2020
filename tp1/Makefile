@@ -1,30 +1,18 @@
-# Opciones para el compilador C/C++ para tratamiento de errores y warnings.
-CFLAGS = -Wall -Werror -pedantic -pedantic-errors
+CFLAGS = -O0 -Wall -Werror -pedantic -pedantic-errors
 
+SRC := src
 machine := $(shell uname -m)
 
-.PHONY: all
-SRC := src
-OBJ := obj
-
-ifeq ($(uname_p),mips64)
-	SOURCES := $(wildcard $(SRC)/*.c *.s)
-	OBJECTS := $(patsubst $(SRC)/%.c %.s, $(OBJ)/%.o, $(SOURCES))
+ifeq ($(machine),mips64)
+	SOURCES := $(SRC)/main.c $(SRC)/vecinos.S
 else
-	SOURCES := $(wildcard $(SRC)/*.c)
-	OBJECTS := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SOURCES))
+	SOURCES := $(SRC)/main.c $(SRC)/vecinos.c
 endif
-
-$(OBJ)/%.o: $(SRC)/%.c | $(OBJ)
-	$(CC) -I$(SRC) -c $< -o $@ $(CFLAGS)
 
 all: conway 
 
-conway: $(OBJECTS) 
-	$(CC) $(OBJECTS) -o conway -lm
+conway: 
+	$(CC) $(SOURCES) -o conway -lm $(CFLAGS)
 
 clean:
-	$(RM) -f $(OBJECTS) conway *.pbm *.mp4
-
-$(OBJ):
-	mkdir -p $(OBJ)
+	$(RM) -f conway *.pbm *.mp4
