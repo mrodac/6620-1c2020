@@ -1,15 +1,15 @@
 CFLAGS = -O0 -Wall -Werror -pedantic -pedantic-errors
 
 SRC := src
-machine := $(shell uname -m)
+SOURCES := $(SRC)/main.c $(SRC)/vecinos.c
 
-ifeq ($(machine),mips64)
-	SOURCES := $(SRC)/main.c $(SRC)/vecinos.S
-else
-	SOURCES := $(SRC)/main.c $(SRC)/vecinos.c
-endif
+ifndef C_IMPL
+	ifeq ($(machine),mips64)
+		SOURCES := $(SRC)/main.c $(SRC)/vecinos.S
+	endif
+endif	
 
-all: conway 
+all: clean conway 
 
 conway: 
 	$(CC) $(SOURCES) -o conway -lm $(CFLAGS)
