@@ -9,7 +9,7 @@ ifndef C_IMPL
 	endif
 endif	
 
-all: clean conway 
+all: conway
 
 conway: 
 	$(CC) $(SOURCES) -o conway -lm $(CFLAGS)
