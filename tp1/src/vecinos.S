@@ -27,7 +27,7 @@ unsigned int vecinos(unsigned char *matriz, unsigned int i, unsigned int j, unsi
 
 Stack:
    8|	fp
-sp 0|	$gp
+sp 0|	gp
 */
 
 //labels para los parámetros
